@@ -701,15 +701,31 @@ class QwenTrainingPipeline:
         output_dir = self.config['training']['output_dir']
         os.makedirs(output_dir, exist_ok=True)
         
-        # Calculate eval steps
+        # Calculate eval and logging steps dynamically
         steps_per_epoch = len(self.train_tokenized) // (
             self.config['training']['per_device_train_batch_size'] * 
             self.config['training']['gradient_accumulation_steps']
         )
         eval_steps = max(1, steps_per_epoch // 10)
         
+        # Calculate logging_steps: log more frequently than eval
+        # For small datasets, log every step; for larger, log every 5-10 steps
+        # But never use the config value if it's too high for the dataset
+        config_logging_steps = self.config['training']['logging_steps']
+        if steps_per_epoch < 10:
+            # Very small dataset - log every step
+            logging_steps = 1
+        elif steps_per_epoch < 50:
+            # Small dataset - log every 2-5 steps
+            logging_steps = max(1, steps_per_epoch // 20)
+        else:
+            # Larger dataset - log every 10-50 steps, but respect config if reasonable
+            calculated_logging = max(5, steps_per_epoch // 20)
+            logging_steps = min(config_logging_steps, calculated_logging)
+        
         print(f"Steps per epoch: {steps_per_epoch}")
         print(f"Eval steps: {eval_steps}")
+        print(f"Logging steps: {logging_steps} (config: {config_logging_steps})")
         
         training_args = TrainingArguments(
             output_dir=output_dir,
@@ -730,7 +746,7 @@ class QwenTrainingPipeline:
             load_best_model_at_end=self.config['training']['load_best_model_at_end'],
             metric_for_best_model=self.config['training']['metric_for_best_model'],
             greater_is_better=self.config['training']['greater_is_better'],
-            logging_steps=self.config['training']['logging_steps'],
+            logging_steps=logging_steps,  # Use calculated logging_steps, not config
             logging_dir=self.config['training']['logging_dir'],
             report_to=self.config['training']['report_to'],
             run_name=self.config['training']['run_name'],

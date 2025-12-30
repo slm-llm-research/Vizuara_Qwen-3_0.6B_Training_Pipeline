@@ -98,7 +98,9 @@ training:
   greater_is_better: true
   
   # Logging
-  logging_steps: 200
+  logging_steps: 200  # Note: train_qwen.py auto-calculates this based on dataset size
+  # For small datasets (10k), actual logging_steps will be ~1-2
+  # For large datasets (1M+), will use min(200, calculated_value)
   logging_dir: "./logs"
   report_to: "wandb"
   
