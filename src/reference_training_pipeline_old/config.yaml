@@ -1,0 +1,268 @@
+# Configuration for Qwen3-8B-Base Fine-tuning on AI/Human Text Detection
+# Dataset: https://huggingface.co/datasets/codefactory4791/ai-human-text-detection-balanced
+# Model: https://huggingface.co/Qwen/Qwen3-8B-Base
+
+# =============================================================================
+# USAGE:
+#
+# Terminal (Recommended for RunPod):
+#   python train_qwen_script.py --config config.yaml
+#   
+#   Optional flags:
+#   --skip_pre_eval                    Skip pre-training evaluation
+#   --wandb_token YOUR_TOKEN           Provide W&B token directly
+#   --hf_token YOUR_HF_TOKEN           Provide HF token directly
+#
+# Jupyter Notebook:
+#   Open train_qwen_ai_detection.ipynb and run all cells
+#
+# =============================================================================
+
+# ==================== Model Configuration ====================
+model:
+  name: "Qwen/Qwen3-0.6B"  # Base model for classification (not Instruct!)
+  # Use BASE models for classification, not Instruct versions
+  # Instruct models are for text generation, Base models for classification
+  # Alternative options:
+  # "Qwen/Qwen2.5-1.5B" (larger, slower)
+  # "Qwen/Qwen2.5-3B" (slower, marginal accuracy gain)
+  # "Qwen/Qwen3-8B-Base" (very slow: 0.02 it/s currently)
+  num_labels: 2
+  # Labels in the dataset
+  label_column: "label_generated"  # Column name for labels
+  text_column: "text"  # Column name for text input
+  labels:
+    - "AI_Generated"
+    - "Human_Written"
+
+# ==================== Dataset Configuration ====================
+dataset:
+  # ✅ Use pre-sampled balanced dataset from HuggingFace Hub
+  use_local_dataset: false  # Set to false to load from HF Hub
+  dataset_path: "/Users/mle/Documents/MLEngineering/Vizuara_LLMResearch/Week2/dataset/hf_balanced_sampled"
+  
+  # HuggingFace Hub dataset (pre-sampled 200k per domain with eval-first strategy)
+  name: "codefactory4791/ai-human-text-detection-balanced_sampled_200k"
+  
+  # Dataset is pre-split, no need to sample
+  train_split: "train"
+  validation_split: "validation"
+  test_split: "test"
+  
+  # ⚠️ SAMPLING DISABLED - Dataset is already balanced and sampled
+  # These are ignored when use_local_dataset=true
+  max_train_samples: null  # Use all from pre-sampled dataset
+  max_eval_samples: null
+  max_test_samples: null
+  shuffle_seed: 42
+  streaming: false
+
+# ==================== Tokenization Configuration ====================
+tokenization:
+  max_length: 384  # ✅ OPTIMIZED: 384 covers 67% of data (median=250, mean=405)
+  # Balanced choice: 256 only covers 51%, 512 covers 85% but slower
+  padding: false  # CRITICAL: Use dynamic padding in data collator (10-20x faster!)
+  truncation: true
+  add_prefix_space: true
+
+# ==================== Quantization Configuration ====================
+quantization:
+  enabled: true  # Set to false for full precision training
+  load_in_4bit: true  # Use 4-bit quantization (recommended for A100)
+  load_in_8bit: false  # Use 8-bit quantization (mutually exclusive with 4-bit)
+  bnb_4bit_quant_type: "nf4"  # Options: "nf4", "fp4"
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: "bfloat16"  # Options: "float16", "bfloat16", "float32"
+
+# ==================== PEFT/LoRA Configuration ====================
+peft:
+  enabled: true  # Set to false for full fine-tuning across all layers
+  # LoRA parameters
+  lora_r: 16  # LoRA rank (8, 16, 32, 64) - higher = more parameters
+  lora_alpha: 32  # LoRA alpha (typically 2x rank)
+  lora_dropout: 0.05
+  bias: "none"  # Options: "none", "all", "lora_only"
+  task_type: "SEQ_CLS"
+  # Target modules for Qwen3 (attention + FFN projection layers)
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  # Optional: add more modules like "embed_tokens", "lm_head"
+  modules_to_save: null  # e.g., ["classifier"] to train classifier fully
+
+# ==================== Training Arguments ====================
+training:
+  output_dir: "./output/qwen3-0.6b-ai-detection"
+  num_train_epochs: 3
+  
+  # Batch size (0.6B model - can potentially increase for faster training)
+  per_device_train_batch_size: 32  # Conservative starting point, can increase if stable
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 8  # Effective batch = 32*8 = 256 (same total)
+  # Start conservative, can increase later if stable
+  
+  gradient_checkpointing: false  # Disable for speed (0.6B fits in memory easily)
+  
+  # Learning rate scaled for effective batch 256 (1e-4 baseline for eff-64)
+  # Formula: lr = 1e-4 × (eff_batch / 64) = 1e-4 × (256/64) = 4e-4
+  # Conservative approach: use 1e-4 to 2e-4 for LoRA
+  learning_rate: 1.0e-4  # Conservative for eff-256; increase to 2e-4 if stable
+  weight_decay: 0.01
+  warmup_ratio: 0.05  # 3-5% warmup for stability
+  lr_scheduler_type: "cosine"  # Options: "linear", "cosine", "constant"
+  
+  # Evaluation and saving
+  eval_strategy: "steps"  # ✅ Evaluate 10 times per epoch for better monitoring
+  eval_steps: null  # Auto-calculated: (total_samples / batch_size) / 10
+  save_strategy: "steps"  # Save after each evaluation
+  save_steps: null  # Auto-calculated: same as eval_steps
+  save_total_limit: 3  # Keep only 3 best checkpoints
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_balanced_accuracy"  # Main metric for checkpoint selection
+  greater_is_better: true
+  
+  # Logging
+  logging_steps: 200  # Less frequent logging reduces I/O overhead
+  logging_dir: "./logs"
+  report_to: "wandb"  # ✅ Report to W&B for experiment tracking
+  
+  # Weights & Biases Configuration
+  run_name: null  # Auto-generated if null (e.g., "qwen3-8b-ai-detection-2024-11-06-08-30")
+  # Set a custom run name: "qwen3-8b-batch32-lr1e4-run1"
+  
+  # Mixed precision training (BF16 for A100 Ampere architecture)
+  # ✅ CRITICAL: Match training precision with quantization compute dtype (bfloat16)
+  fp16: false  # Disable FP16 to avoid dtype conversion overhead
+  bf16: true   # Use BF16 end-to-end on A100 (better stability + faster kernels)
+  
+  # Optimization (A100 Ampere-optimized)
+  optim: "adamw_torch_fused"  # ✅ Fused Adam for A100 speed (was paged_adamw_8bit)
+  # Faster kernels on Ampere; memory is fine with 4-bit+LoRA
+  max_grad_norm: 1.0
+  
+  # Data loading (OPTIMIZED for container environments)
+  dataloader_num_workers: 6  # ✅ Reduced to 6 to avoid IPC/shared memory contention in Docker/RunPod
+  # For RunPod: Launch with --ipc=host or --shm-size=16g to increase shared memory
+  dataloader_pin_memory: true
+  dataloader_persistent_workers: true  # ✅ Keep workers alive across iterations (reduces overhead)
+  group_by_length: false  # ✅ DISABLED: Sorting 2M samples per epoch is too slow; dynamic padding handles this
+  
+  # Misc
+  seed: 42
+  remove_unused_columns: false
+  push_to_hub: false  # Set to true to push to HuggingFace Hub
+  hub_model_id: null  # e.g., "your-username/qwen3-0.6b-ai-detection"
+  hub_token: null  # HuggingFace token (can also use --hf_token CLI argument)
+
+# ==================== Early Stopping ====================
+early_stopping:
+  enabled: true  # ✅ Early stopping enabled
+  patience: 4  # Number of eval steps with no improvement (~0.4 epoch at 10 evals/epoch)
+  threshold: 0.001  # Minimum change to qualify as improvement
+
+# ==================== Class Weights ====================
+class_weights:
+  enabled: true  # Use class weights in loss function for label imbalance
+  method: "inverse_frequency"  # Options: "inverse_frequency", "manual"
+  manual_weights: null  # e.g., [0.4, 0.6] for manual specification
+
+# ==================== Sample Weighting (NEW) ====================
+sample_weighting:
+  enabled: false  # Disabled: Using class-weighted CrossEntropyLoss instead of WeightedRandomSampler
+  # Pre-computed weights formula: w = (label_weight^alpha) * (domain_weight^beta)
+  # where domain_weight uses inverse sqrt frequency
+  # Note: sample_weight column must exist in training dataset
+  weight_column: "sample_weight"  # Column name containing pre-computed weights (not used when enabled=false)
+
+# ==================== Data Collator ====================
+data_collator:
+  type: "DataCollatorWithPadding"  # Options: "DataCollatorWithPadding", "default"
+  padding: true
+  pad_to_multiple_of: 8  # Pad to multiple of 8 for tensor cores
+
+# ==================== Evaluation Configuration ====================
+evaluation:
+  run_pre_training_eval: true  # Run evaluation before training (baseline)
+  run_post_training_eval: true  # Run evaluation after training
+  
+  # Pre-training evaluation (baseline)
+  pre_training_eval_samples: null  # Use full evaluation dataset
+  
+  # Quick evaluation subset (for frequent checks during training)
+  # Sample ~500 sequences per domain from eval set for fast feedback
+  use_quick_eval: true  # Enable quick evaluation subset
+  quick_eval_samples_per_domain: 500  # Sample size per domain (if domain info available)
+  quick_eval_total_samples: 5000  # Total samples if domain info not available
+  
+  # Full evaluation (run at end of each epoch)
+  full_eval_at_epoch_end: false  # ✅ DISABLED: Use quick_eval during training, save ~1h per epoch
+  # Full eval only runs after final epoch
+  
+  # Metrics to compute
+  compute_metrics:
+    - "accuracy"
+    - "balanced_accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "confusion_matrix"
+    - "classification_report"
+  # Save predictions
+  save_predictions: true
+  predictions_file: "predictions.csv"
+
+# ==================== Hardware Configuration ====================
+hardware:
+  device_map: "auto"  # Automatically map model to available devices
+  max_memory: null  # e.g., {0: "40GB"} for specific GPU memory limit
+  offload_folder: null  # Folder for CPU offloading if needed
+
+# ==================== Performance Optimizations ====================
+performance:
+  # Flash Attention 2 (15-25% faster on A100, requires flash-attn package)
+  use_flash_attention_2: true  # ✅ Enable if available (auto-fallback if not)
+  # TensorFloat-32 (faster matmul on Ampere A100)
+  use_tf32: true  # ✅ Enable TF32 for faster computation
+  # Shared memory warning
+  # IMPORTANT: Launch RunPod/Docker with --ipc=host OR --shm-size=16g
+  # Small shared memory causes dataloader workers to serialize (2x slower!)
+
+# ==================== Miscellaneous ====================
+misc:
+  cache_dir: null  # Directory to cache downloaded models/datasets
+  trust_remote_code: true  # Required for some models
+  use_fast_tokenizer: true
+  resume_from_checkpoint: null  # Path to checkpoint to resume training
+  
+  # Dataset caching (saves hours on re-runs!)
+  save_tokenized_datasets: true  # Save tokenized data to disk
+  tokenized_cache_dir: "./tokenized_cache"  # Where to save/load tokenized datasets
+  force_retokenize: false  # ✅ Use cached tokenized data (set to true only if tokenization params change)
+  # Set to true only if you change tokenization parameters (max_length, etc.)
+  
+  # Sampled dataset caching (skip sampling on re-runs)
+  save_sampled_datasets: true  # Save sampled datasets before tokenization
+  sampled_cache_dir: "./sampled_cache"  # Where to save/load sampled datasets
+  force_resample: false  # Set to true to ignore sampled cache and re-sample
+
+# ==================== Weights & Biases ====================
+wandb:
+  enabled: true  # ✅ ENABLED for experiment tracking
+  project: "qwen-ai-detection"  # Your W&B project name
+  entity: null  # Your W&B username/team (null = default)
+  tags:  # Tags for organizing runs
+    - "qwen3-0.6b"
+    - "ai-detection"
+    - "lora"
+    - "binary-classification"
+    - "optimized"
+  notes: "Qwen3-0.6B fine-tuning - optimized config: bf16, no group_by_length, fused Adam"
+  # What to log
+  log_model: "end"  # Options: "end" (save at end), "checkpoint" (save all), false (don't save)
+  watch: false  # Gradient watching disabled for speed (minimal overhead impact)
+

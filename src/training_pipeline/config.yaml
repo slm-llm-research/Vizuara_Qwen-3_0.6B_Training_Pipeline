@@ -1,0 +1,223 @@
+# Configuration for Qwen3-0.6B Fine-tuning on AI/Human Text Detection
+# Generic configuration that works across all dataset sizes
+# Datasets: 10k, 100k, 1M, 2M
+
+# ==================== Model Configuration ====================
+model:
+  name: "Qwen/Qwen3-0.6B"  # Base model for classification
+  num_labels: 2
+  label_column: "label"  # Column name for labels in dataset
+  text_column: "text"  # Column name for text input in dataset
+  labels:
+    - "AI_Generated"
+    - "Human_Written"
+
+# ==================== Dataset Configuration ====================
+dataset:
+  # Dataset will be selected at runtime from the notebook
+  # Available datasets:
+  #   - codefactory4791/raid_aligned_10k
+  #   - codefactory4791/raid_aligned_100k
+  #   - codefactory4791/raid_aligned_1000k
+  #   - codefactory4791/raid_aligned_2000k
+  
+  dataset_name: null  # Will be set dynamically in notebook
+  
+  # Dataset splits
+  train_split: "train"
+  validation_split: "validation"
+  test_split: "test"
+  
+  # Sampling (usually not needed as datasets are pre-split)
+  max_train_samples: null  # Use all samples
+  max_eval_samples: null
+  max_test_samples: null
+  shuffle_seed: 42
+  streaming: false
+
+# ==================== Tokenization Configuration ====================
+tokenization:
+  max_length: 384  # Optimized for coverage and speed
+  padding: false  # Use dynamic padding in data collator
+  truncation: true
+  add_prefix_space: true
+
+# ==================== Quantization Configuration ====================
+quantization:
+  enabled: true  # Enable for memory efficiency on A100
+  load_in_4bit: true  # 4-bit quantization
+  load_in_8bit: false
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: "bfloat16"
+
+# ==================== PEFT/LoRA Configuration ====================
+peft:
+  enabled: true  # Use LoRA for efficient fine-tuning
+  lora_r: 16  # LoRA rank
+  lora_alpha: 32  # LoRA alpha (typically 2x rank)
+  lora_dropout: 0.05
+  bias: "none"
+  task_type: "SEQ_CLS"
+  target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+    - "gate_proj"
+    - "up_proj"
+    - "down_proj"
+  modules_to_save: null
+
+# ==================== Training Arguments ====================
+training:
+  output_dir: "./output/qwen3-0.6b-ai-detection"  # Will be updated based on dataset
+  num_train_epochs: 3
+  
+  # Batch size (optimized for A100)
+  per_device_train_batch_size: 32
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 8  # Effective batch = 256
+  
+  gradient_checkpointing: false  # Disable for speed
+  
+  # Learning rate
+  learning_rate: 1.0e-4
+  weight_decay: 0.01
+  warmup_ratio: 0.05
+  lr_scheduler_type: "cosine"
+  
+  # Evaluation and saving
+  eval_strategy: "steps"
+  eval_steps: null  # Auto-calculated in notebook
+  save_strategy: "steps"
+  save_steps: null  # Auto-calculated in notebook
+  save_total_limit: 3
+  load_best_model_at_end: true
+  metric_for_best_model: "eval_balanced_accuracy"
+  greater_is_better: true
+  
+  # Logging
+  logging_steps: 200
+  logging_dir: "./logs"
+  report_to: "wandb"
+  
+  # Run name (will be auto-generated based on dataset)
+  run_name: null
+  
+  # Mixed precision training (BF16 for A100)
+  fp16: false
+  bf16: true
+  
+  # Optimization
+  optim: "adamw_torch_fused"
+  max_grad_norm: 1.0
+  
+  # Data loading
+  dataloader_num_workers: 6
+  dataloader_pin_memory: true
+  dataloader_persistent_workers: true
+  group_by_length: false
+  
+  # Misc
+  seed: 42
+  remove_unused_columns: false
+  push_to_hub: false
+  hub_model_id: null
+  hub_token: null
+
+# ==================== Early Stopping ====================
+early_stopping:
+  enabled: true
+  patience: 4
+  threshold: 0.001
+
+# ==================== Class Weights ====================
+class_weights:
+  enabled: true  # Will be calculated automatically based on dataset
+  method: "inverse_frequency"
+  manual_weights: null  # Will be computed dynamically
+
+# ==================== Sample Weighting ====================
+sample_weighting:
+  enabled: false
+  weight_column: "sample_weight"
+
+# ==================== Data Collator ====================
+data_collator:
+  type: "DataCollatorWithPadding"
+  padding: true
+  pad_to_multiple_of: 8
+
+# ==================== Evaluation Configuration ====================
+evaluation:
+  run_pre_training_eval: true
+  run_post_training_eval: true
+  
+  # Pre-training evaluation
+  pre_training_eval_samples: 1000  # Quick baseline evaluation
+  
+  # Quick evaluation
+  use_quick_eval: false
+  quick_eval_samples_per_domain: 500
+  quick_eval_total_samples: 5000
+  
+  # Full evaluation
+  full_eval_at_epoch_end: false
+  
+  # Metrics
+  compute_metrics:
+    - "accuracy"
+    - "balanced_accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "confusion_matrix"
+    - "classification_report"
+  
+  # Save predictions
+  save_predictions: true
+  predictions_file: "predictions.csv"
+
+# ==================== Hardware Configuration ====================
+hardware:
+  device_map: "auto"
+  max_memory: null
+  offload_folder: null
+
+# ==================== Performance Optimizations ====================
+performance:
+  use_flash_attention_2: true
+  use_tf32: true
+
+# ==================== Miscellaneous ====================
+misc:
+  cache_dir: null
+  trust_remote_code: true
+  use_fast_tokenizer: true
+  resume_from_checkpoint: null
+  
+  # Dataset caching
+  save_tokenized_datasets: true
+  tokenized_cache_dir: "./tokenized_cache"
+  force_retokenize: false
+  
+  # Sampled dataset caching
+  save_sampled_datasets: true
+  sampled_cache_dir: "./sampled_cache"
+  force_resample: false
+
+# ==================== Weights & Biases ====================
+wandb:
+  enabled: true
+  project: "Vizuara AI Human Content Detection Qwen 3 0.6B Finetuning"
+  entity: null
+  tags:
+    - "qwen3-0.6b"
+    - "ai-detection"
+    - "lora"
+    - "binary-classification"
+  notes: "Qwen3-0.6B fine-tuning for AI/Human text detection with automatic class weighting"
+  log_model: "end"
+  watch: false
+
