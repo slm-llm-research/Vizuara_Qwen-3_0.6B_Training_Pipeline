@@ -27,27 +27,102 @@ This directory contains a generic training pipeline for fine-tuning Qwen3-0.6B o
 ## Files
 
 - `config.yaml` - Configuration file with all training parameters
-- `train_qwen_standalone.py` - **Complete standalone Python script (RECOMMENDED)**
+- `train_qwen.py` - **Class-based refactored script with CLI (RECOMMENDED)**
+- `train_qwen_standalone.py` - Original standalone script (proven, simple)
 - `train_qwen_generic.ipynb` - Jupyter notebook version (partially complete)
 - `requirements.txt` - Python package dependencies
 - `README.md` - This file
 - `QUICKSTART.md` - Fast-start guide
+- `ARCHITECTURE.md` - Architecture comparison and details
 - `PIPELINE_SUMMARY.md` - Overview and summary
 
 ## File Status
 
-| File | Status | Lines | Completeness | Recommended For |
-|------|--------|-------|--------------|-----------------|
-| `train_qwen_standalone.py` | Complete | 934 | 100% | RunPod, Production |
-| `train_qwen_generic.ipynb` | Partial | 300 | ~40% | Interactive Development |
+| File | Status | Architecture | Lines | Completeness | Recommended For |
+|------|--------|--------------|-------|--------------|-----------------|
+| `train_qwen.py` | ✅ Complete | **Class-Based** | ~1200 | 100% | **Production, CLI** |
+| `train_qwen_standalone.py` | ✅ Complete | Procedural | 934 | 100% | Quick Start, Simple |
+| `train_qwen_generic.ipynb` | ⚠️ Partial | Interactive | 300 | ~40% | Learning |
+
+**New!** `train_qwen.py` is a completely refactored version with:
+- Clean class-based architecture
+- Full CLI argument support
+- Modular components (easy to test/extend)
+- Same functionality as standalone script
+- Professional code structure
+
+See `ARCHITECTURE.md` for detailed comparison.
 
 ## Quick Start
 
-### Option 1: Using the Standalone Script (RECOMMENDED)
+### Option 1: Using the Refactored Script with CLI (RECOMMENDED)
 
 **Status**: Complete and production-ready
 
-**Best for**: RunPod training, background jobs, production use
+**Architecture**: Class-based with full CLI support
+
+**Best for**: Production training, RunPod, flexibility, no code editing needed
+
+```bash
+# Navigate to directory
+cd /Users/mle/Documents/MLEngineering/Vizuara_LLMResearch/Vizuara_Qwen-3_0.6B_Training_Pipeline/src/training_pipeline
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Basic usage - select dataset via CLI
+python3 train_qwen.py --dataset 10k
+
+# With custom hyperparameters - NO CODE EDITING NEEDED!
+python3 train_qwen.py --dataset 1M --epochs 5 --batch-size 16 --learning-rate 2e-4
+
+# Disable WandB
+python3 train_qwen.py --dataset 100k --no-wandb
+
+# Resume from checkpoint
+python3 train_qwen.py --dataset 10k --resume ./output/qwen3-0.6b-10k/checkpoint-1000
+
+# Run in background
+nohup python3 train_qwen.py --dataset 1M > training.log 2>&1 &
+```
+
+**CLI Arguments**:
+- `--dataset`: Dataset size (10k, 100k, 1M, 2M) - **REQUIRED**
+- `--epochs`: Number of epochs (overrides config)
+- `--batch-size`: Batch size per device (overrides config)
+- `--learning-rate`: Learning rate (overrides config)
+- `--lora-rank`: LoRA rank (overrides config)
+- `--no-wandb`: Disable WandB logging
+- `--resume`: Path to checkpoint to resume from
+- `--config`: Custom config file path
+
+**What it includes**:
+- ✅ Clean class-based architecture (12 modular methods)
+- ✅ Full CLI argument parsing
+- ✅ Complete training pipeline (data loading to model saving)
+- ✅ WandB integration with pre-configured API key
+- ✅ Automatic class weight calculation
+- ✅ Pre and post-training evaluation
+- ✅ Progress tracking and detailed logging
+- ✅ Smart caching for faster subsequent runs
+- ✅ Comprehensive error handling
+- ✅ Easy to test and extend
+- ✅ Can be imported as a module
+
+**Advantages**:
+- 🚀 No code editing required - all parameters via CLI
+- 🧩 Modular design - can test/reuse individual components
+- 🔧 Flexible - override any parameter without editing config
+- 📦 Importable - use in other Python scripts
+- 🎯 Professional code structure
+
+### Option 2: Using the Original Standalone Script (Simple Alternative)
+
+**Status**: Complete and proven
+
+**Architecture**: Procedural (single main function)
+
+**Best for**: Quick start without learning class structure, simplicity
 
 ```bash
 # Navigate to directory
@@ -68,15 +143,13 @@ nohup python3 train_qwen_standalone.py > training.log 2>&1 &
 ```
 
 **What it includes**:
-- Complete training pipeline (data loading to model saving)
-- WandB integration with pre-configured API key
-- Automatic class weight calculation
-- Pre and post-training evaluation
-- Progress tracking and detailed logging
-- Smart caching for faster subsequent runs
-- Error handling and validation
+- ✅ Complete training pipeline
+- ✅ All functionality from refactored version
+- ✅ Proven and tested
+- ⚠️ Must edit source code to change settings
+- ⚠️ Monolithic structure (800+ lines in one function)
 
-### Option 2: Using the Jupyter Notebook
+### Option 3: Using the Jupyter Notebook
 
 **Status**: Partially complete (12 cells, covers setup and configuration only)
 
@@ -635,9 +708,26 @@ For issues or questions:
 ## Summary
 
 **Quick Decision Guide**:
-- **Want to train now?** → Use `train_qwen_standalone.py`
+- **Want CLI and flexibility?** → Use `train_qwen.py` ✅ **RECOMMENDED**
+- **Want simple quick start?** → Use `train_qwen_standalone.py`
 - **Want to learn/explore?** → Use `train_qwen_generic.ipynb` (partial)
-- **Need complete notebook?** → Request completion or use standalone script
-- **Best for RunPod?** → `train_qwen_standalone.py`
-- **Best for learning?** → `train_qwen_generic.ipynb` then standalone script
+- **Need to change parameters often?** → Use `train_qwen.py` (CLI arguments)
+- **Best for RunPod?** → `train_qwen.py` (no code editing)
+- **Best for production?** → `train_qwen.py` (professional structure)
+- **Best for learning?** → `train_qwen_generic.ipynb` then `train_qwen.py`
+
+**Script Comparison**:
+
+| Feature | train_qwen.py | train_qwen_standalone.py | train_qwen_generic.ipynb |
+|---------|---------------|--------------------------|--------------------------|
+| **CLI Support** | ✅ Full | ❌ None | ❌ N/A |
+| **Code Editing** | ❌ Not needed | ✅ Required | ✅ In cells |
+| **Architecture** | Class-Based | Procedural | Interactive |
+| **Modularity** | ✅ High | ⚠️ Low | ✅ High |
+| **Testability** | ✅ Easy | ⚠️ Hard | ✅ Easy |
+| **Completeness** | 100% | 100% | 40% |
+| **Learning Curve** | Medium | Low | Low |
+| **Production Ready** | ✅ Yes | ✅ Yes | ❌ No |
+
+See **ARCHITECTURE.md** for detailed comparison.
 
