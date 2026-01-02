@@ -85,26 +85,30 @@ DATASET_OPTIONS = {
     "10k": {
         "name": "codefactory4791/raid_aligned_10k",
         "size": "~10K samples",
-        "balance": "Balanced (50/50)",
-        "class_weights": [1.0, 1.0]
+        "balance": "Balanced (AI: 50.01%, Human: 49.99%)",
+        "class_weights": [0.9998, 1.0002],  # Updated from clean splits v2
+        "clean_splits": True
     },
     "100k": {
         "name": "codefactory4791/raid_aligned_100k",
         "size": "~100K samples",
-        "balance": "Balanced (50/50)",
-        "class_weights": [1.0, 1.0]
+        "balance": "Nearly Balanced (AI: 49.87%, Human: 50.13%)",
+        "class_weights": [1.0026, 0.9975],  # Updated from clean splits v2
+        "clean_splits": True
     },
     "1M": {
         "name": "codefactory4791/raid_aligned_1000k",
         "size": "~1M samples",
-        "balance": "Slightly Imbalanced (AI: 52.17%, Human: 47.83%)",
-        "class_weights": [0.9167, 1.0909]
+        "balance": "Imbalanced (AI: 52.15%, Human: 47.85%)",
+        "class_weights": [0.9588, 1.0449],  # Updated from clean splits v2
+        "clean_splits": True
     },
     "2M": {
         "name": "codefactory4791/raid_aligned_2000k",
         "size": "~2M samples",
-        "balance": "Imbalanced (AI: 54.57%, Human: 45.43%)",
-        "class_weights": [0.8324, 1.2009]
+        "balance": "More Imbalanced (AI: 54.55%, Human: 45.45%)",
+        "class_weights": [0.9165, 1.1002],  # Updated from clean splits v2
+        "clean_splits": True
     }
 }
 
